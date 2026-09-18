@@ -30,6 +30,10 @@ object NavigationTrace {
     private var sequence = 0L
 
     fun record(context: Context, title: String, url: String) {
+        recordDetails(context, title, url, null)
+    }
+
+    fun recordDetails(context: Context, title: String, url: String, details: String?) {
         val safeUrl = try {
             val uri = android.net.Uri.parse(url)
             val base = buildString {
@@ -47,7 +51,12 @@ object NavigationTrace {
             sequence += 1
             val stamp = SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSSZ", Locale.US).format(Date())
             val event = title.ifBlank { "EVENT" }.replace("\n", " ").replace("\r", " ")
-            val line = "#$sequence $stamp [$event] url=$safeUrl\n"
+            val detailText = details?.replace("\n", " ")?.replace("\r", " ")?.trim()?.takeIf { it.isNotEmpty() }
+            val line = buildString {
+                append("#$sequence $stamp [$event] url=$safeUrl")
+                if (detailText != null) append(" details=").append(detailText)
+                append("\n")
+            }
             Log.d(TAG, line.trimEnd())
             try {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {

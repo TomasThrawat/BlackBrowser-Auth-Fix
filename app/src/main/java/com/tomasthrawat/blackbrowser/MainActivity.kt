@@ -380,6 +380,19 @@ open class MainActivity : AppCompatActivity() {
         // stateless and can trigger repeated unusual-traffic challenges.
         CookieManager.getInstance().setAcceptCookie(true)
         CookieManager.getInstance().setAcceptThirdPartyCookies(wv, true)
+        NavigationTrace.recordDetails(
+            applicationContext,
+            "WEBVIEW_CONFIG",
+            "about:blank",
+            "package=${WebView.getCurrentWebViewPackage()?.packageName ?: "unknown"}" +
+                ";version=${WebView.getCurrentWebViewPackage()?.versionName ?: "unknown"}" +
+                ";ua=${wv.settings.userAgentString}" +
+                ";cacheMode=${wv.settings.cacheMode}" +
+                ";js=${wv.settings.javaScriptEnabled}" +
+                ";domStorage=${wv.settings.domStorageEnabled}" +
+                ";thirdPartyCookies=${CookieManager.getInstance().acceptThirdPartyCookies(wv)}" +
+                ";acceptCookies=${CookieManager.getInstance().acceptCookie()}"
+        )
 
         wv.webViewClient = object : WebViewClient() {
             // Stops a same-tab redirect chain (meta-refresh, JS location change, a clicked
@@ -391,7 +404,10 @@ open class MainActivity : AppCompatActivity() {
                 request: WebResourceRequest?
             ): Boolean {
                 val url = request?.url ?: return false
-                NavigationTrace.record(applicationContext, "NAV_REQUEST", url.toString())
+                NavigationTrace.recordDetails(
+                    applicationContext, "NAV_REQUEST", url.toString(),
+                    "method=${request.method};mainFrame=${request.isForMainFrame};gesture=${request.hasGesture()};redirect=${request.isRedirect};headers=${request.requestHeaders.keys.sorted().joinToString(",")}"
+                )
                 // Same-tab OAuth/2FA redirect chains (Google/Apple/Microsoft/etc. sign-in
                 // callbacks) must never be silently killed by the ad-block host list -- only
                 // the popup path (onCreateWindow) used to be exempted via
@@ -480,7 +496,12 @@ open class MainActivity : AppCompatActivity() {
                 request: WebResourceRequest?
             ): WebResourceResponse? {
                 val url = request?.url
-                if (url != null) NavigationTrace.record(applicationContext, "RESOURCE", url.toString())
+                if (url != null) {
+                    NavigationTrace.recordDetails(
+                        applicationContext, "RESOURCE", url.toString(),
+                        "method=${request.method};mainFrame=${request.isForMainFrame};gesture=${request.hasGesture()};redirect=${request.isRedirect};headers=${request.requestHeaders.keys.sorted().joinToString(",")}"
+                    )
+                }
                 // Widened past the original main-frame-only exemption: a same-tab 2FA
                 // "waiting for your confirmation" flow (e.g. Google's own-device approval
                 // step) polls its own host in the background via XHR/fetch -- those are
@@ -500,6 +521,26 @@ open class MainActivity : AppCompatActivity() {
                     return WebResourceResponse("text/plain", "UTF-8", ByteArrayInputStream(ByteArray(0)))
                 }
                 return super.shouldInterceptRequest(view, request)
+            }
+
+            override fun onReceivedHttpError(view: WebView?, request: WebResourceRequest?, errorResponse: WebResourceResponse?) {
+                super.onReceivedHttpError(view, request, errorResponse)
+                val url = request?.url ?: return
+                NavigationTrace.recordDetails(applicationContext, "HTTP_ERROR", url.toString(),
+                    "status=${errorResponse?.statusCode ?: -1};reason=${errorResponse?.reasonPhrase ?: "unknown"};mainFrame=${request.isForMainFrame};method=${request.method}")
+            }
+
+            override fun onReceivedError(view: WebView?, request: WebResourceRequest?, error: WebResourceError?) {
+                super.onReceivedError(view, request, error)
+                val url = request?.url ?: return
+                NavigationTrace.recordDetails(applicationContext, "WEB_ERROR", url.toString(),
+                    "code=${error?.errorCode ?: -1};description=${error?.description ?: "unknown"};mainFrame=${request.isForMainFrame};method=${request.method}")
+            }
+
+            override fun onReceivedSslError(view: WebView?, handler: SslErrorHandler?, error: android.net.http.SslError?) {
+                NavigationTrace.recordDetails(applicationContext, "SSL_ERROR", error?.url ?: "about:blank",
+                    "primaryError=${error?.primaryError ?: -1}")
+                super.onReceivedSslError(view, handler, error)
             }
         }
 
