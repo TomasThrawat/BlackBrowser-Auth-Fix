@@ -8824,6 +8824,14 @@ object AdBlocker {
         ) == true
     }
 
+    // Keep first-party Google resources available while browsing Google Search.
+    // The extended adblock list contains broad Google-family matches that can also
+    // cover session, search-state, or UI resources. Third-party ad hosts remain blocked.
+    fun isGoogleFirstPartyResource(uri: Uri): Boolean {
+        val host = uri.host?.lowercase() ?: return false
+        return host == "google.com" || host.endsWith(".google.com")
+    }
+
     fun isGoogleVerificationResource(uri: Uri): Boolean {
         val host = uri.host?.lowercase() ?: return false
         if (host == "clientmetrics-pa.googleapis.com") return true
@@ -8838,6 +8846,7 @@ object AdBlocker {
     }
 
     fun shouldBlock(uri: Uri): Boolean {
+        if (isGoogleFirstPartyResource(uri)) return false
         if (isGoogleSearchSupportResource(uri)) return false
         if (isGoogleVerificationResource(uri)) return false
         val host = uri.host?.lowercase() ?: return false
