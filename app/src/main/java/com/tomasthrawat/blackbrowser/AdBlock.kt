@@ -8812,6 +8812,18 @@ object AdBlocker {
     // Google Search uses these endpoints for reCAPTCHA Enterprise / risk verification.
     // They are not ad hosts; blocking them can leave the verification page unable to
     // complete, so Google keeps the session on /sorry/index.
+    // Google Search also uses OneGoogle async data for session/risk state.
+    // This is not an ad resource. The diagnostic log showed this exact request
+    // being blocked, so keep only this host/path pair outside the ad blocklist.
+    fun isGoogleSearchSupportResource(uri: Uri): Boolean {
+        val host = uri.host?.lowercase() ?: return false
+        if (host != "ogads-pa.clients6.google.com") return false
+        return uri.path?.equals(
+            "/$rpc/google.internal.onegoogle.asyncdata.v1.AsyncDataService/GetAsyncData",
+            ignoreCase = true
+        ) == true
+    }
+
     fun isGoogleVerificationResource(uri: Uri): Boolean {
         val host = uri.host?.lowercase() ?: return false
         if (host == "clientmetrics-pa.googleapis.com") return true
@@ -8826,6 +8838,7 @@ object AdBlocker {
     }
 
     fun shouldBlock(uri: Uri): Boolean {
+        if (isGoogleSearchSupportResource(uri)) return false
         if (isGoogleVerificationResource(uri)) return false
         val host = uri.host?.lowercase() ?: return false
         if (hostOrParentMatches(host, allBlockedHosts)) return true
