@@ -435,7 +435,10 @@ open class MainActivity : AppCompatActivity() {
                 // comment: identity-provider hosts -- and the hop right after one -- must keep
                 // the disguised UA and never replay a cached redirect-chain response; every
                 // other host keeps the plain UA and LOAD_DEFAULT.
-                val needsFreshLoad = hostNeedsUaSpoof(url.host) || (view?.cameFromIdentityProvider() == true)
+                val isOrdinaryGoogleHost = url.host?.equals("www.google.com", ignoreCase = true) == true ||
+                    url.host?.equals("google.com", ignoreCase = true) == true
+                val needsFreshLoad = !isOrdinaryGoogleHost &&
+                    (hostNeedsUaSpoof(url.host) || (view?.cameFromIdentityProvider() == true))
                 // A POST navigation -- e.g. the form submit Google's account-chooser step
                 // does the moment an account is tapped -- carries a body that
                 // WebResourceRequest never exposes; there is no way to read it back out to
@@ -1350,8 +1353,15 @@ open class MainActivity : AppCompatActivity() {
         // the server, as a different client mid-flow). Getting either wrong on its own was
         // enough to make the provider bounce the flow back to itself in a loop; every other
         // host keeps LOAD_DEFAULT and the plain UA so normal browsing is unaffected.
-        val needsFreshLoad = hostNeedsUaSpoof(host) || cameFromIdentityProvider()
-        settings.userAgentString = computeUserAgent(host, forceSpoof = needsFreshLoad)
+        val isOrdinaryGoogleHost = host?.equals("www.google.com", ignoreCase = true) == true ||
+            host?.equals("google.com", ignoreCase = true) == true
+        val needsFreshLoad = !isOrdinaryGoogleHost &&
+            (hostNeedsUaSpoof(host) || cameFromIdentityProvider())
+        settings.userAgentString = if (isOrdinaryGoogleHost) {
+            WebSettings.getDefaultUserAgent(this@MainActivity)
+        } else {
+            computeUserAgent(host, forceSpoof = needsFreshLoad)
+        }
         settings.cacheMode = if (needsFreshLoad) WebSettings.LOAD_NO_CACHE else WebSettings.LOAD_DEFAULT
         loadUrl(url)
     }
