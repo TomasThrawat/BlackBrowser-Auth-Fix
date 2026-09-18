@@ -31,6 +31,9 @@ class IncognitoActivity : MainActivity() {
         CookieManager.getInstance().removeAllCookies(null)
         CookieManager.getInstance().flush()
         WebStorage.getInstance().deleteAllData()
+        // Clear the isolated WebView cache so private browsing data does not remain
+        // in the incognito profile after the activity is closed.
+        runCatching { WebView(this).apply { clearCache(true); destroy() } }
         super.onDestroy()
     }
 }
