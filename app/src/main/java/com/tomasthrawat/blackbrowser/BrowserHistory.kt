@@ -39,26 +39,28 @@ object NavigationTrace {
                 uri.path?.let { append(it) }
             }
             if (!uri.query.isNullOrBlank()) base + "?[query-redacted]" else base
-        } catch (_: Exception) { "<invalid-url>" }
-
-        val line = synchronized(lock) {
-            sequence += 1
-            val stamp = SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSSZ", Locale.US).format(Date())
-            "#" + sequence + " " + stamp + " [PAGE_FINISHED] url=" + safeUrl +
-                " title=" + title.take(120).replace("\n", " ") + "\n"
+        } catch (_: Exception) {
+            "<invalid-url>"
         }
-        Log.d(TAG, line.trimEnd())
 
         synchronized(lock) {
+            sequence += 1
+            val stamp = SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSSZ", Locale.US).format(Date())
+            val event = title.ifBlank { "EVENT" }.replace("\n", " ").replace("\r", " ")
+            val line = "#$sequence $stamp [$event] url=$safeUrl\n"
+            Log.d(TAG, line.trimEnd())
             try {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                    val resolver = context.contentResolver
                     val uri = getCanonicalUri(context)
                     if (uri != null) {
-                        resolver.openOutputStream(uri, "wa")?.use { it.write(line.toByteArray(Charsets.UTF_8)) }
+                        context.contentResolver.openOutputStream(uri, "wa")?.use {
+                            it.write(line.toByteArray(Charsets.UTF_8))
+                        }
                     }
                 } else {
-                    val dir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS + "/BlackBrowser")
+                    val dir = Environment.getExternalStoragePublicDirectory(
+                        Environment.DIRECTORY_DOWNLOADS + "/BlackBrowser"
+                    )
                     if (!dir.exists()) dir.mkdirs()
                     java.io.File(dir, FILE_NAME).appendText(line, Charsets.UTF_8)
                 }
@@ -72,11 +74,12 @@ object NavigationTrace {
     private fun getCanonicalUri(context: Context): android.net.Uri? {
         val resolver = context.contentResolver
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+
         val saved = prefs.getString(KEY_URI, null)
         if (!saved.isNullOrBlank()) {
             val savedUri = android.net.Uri.parse(saved)
             try {
-                resolver.openAssetFileDescriptor(savedUri, "wa")?.use { return savedUri }
+                resolver.openOutputStream(savedUri, "wa")?.use { return savedUri }
             } catch (_: Exception) {
                 prefs.edit().remove(KEY_URI).apply()
             }
@@ -84,21 +87,29 @@ object NavigationTrace {
 
         val collection = MediaStore.Downloads.EXTERNAL_CONTENT_URI
         val matches = mutableListOf<android.net.Uri>()
+
         resolver.query(
             collection,
-            arrayOf(MediaStore.Downloads._ID),
-            MediaStore.Downloads.DISPLAY_NAME + "=? AND " + MediaStore.Downloads.MIME_TYPE + "=? AND " +
-                MediaStore.Downloads.RELATIVE_PATH + "=?",
-            arrayOf(FILE_NAME, MIME, RELATIVE_PATH + "/"),
+            arrayOf(MediaStore.Downloads._ID, MediaStore.Downloads.DISPLAY_NAME),
+            MediaStore.Downloads.RELATIVE_PATH + "=? AND " +
+                MediaStore.Downloads.DISPLAY_NAME + "=?",
+            arrayOf(RELATIVE_PATH + "/", FILE_NAME),
             MediaStore.Downloads._ID + " ASC"
-        )?.use { c ->
-            val id = c.getColumnIndex(MediaStore.Downloads._ID)
-            while (c.moveToNext()) matches += android.net.Uri.withAppendedPath(collection, c.getLong(id).toString())
+        )?.use { cursor ->
+            val idColumn = cursor.getColumnIndex(MediaStore.Downloads._ID)
+            while (cursor.moveToNext()) {
+                matches += android.net.Uri.withAppendedPath(
+                    collection,
+                    cursor.getLong(idColumn).toString()
+                )
+            }
         }
 
         val uri = if (matches.isNotEmpty()) {
             val keep = matches.first()
-            for (extra in matches.drop(1)) runCatching { resolver.delete(extra, null, null) }
+            matches.drop(1).forEach { extra ->
+                runCatching { resolver.delete(extra, null, null) }
+            }
             keep
         } else {
             val values = ContentValues().apply {
@@ -110,7 +121,9 @@ object NavigationTrace {
             resolver.insert(collection, values)
         }
 
-        uri?.let { prefs.edit().putString(KEY_URI, it.toString()).apply() }
+        uri?.let {
+            prefs.edit().putString(KEY_URI, it.toString()).apply()
+        }
         return uri
     }
 }
