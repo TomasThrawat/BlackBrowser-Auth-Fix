@@ -410,6 +410,10 @@ open class MainActivity : AppCompatActivity() {
                     applicationContext, "NAV_REQUEST", url.toString(),
                     "method=${request.method};mainFrame=${request.isForMainFrame};gesture=${request.hasGesture()};redirect=${request.isRedirect};headers=${request.requestHeaders.keys.sorted().joinToString(",")}"
                 )
+                if (request.isForMainFrame && request.method.equals("GET", ignoreCase = true) && url.host?.equals("www.google.com", ignoreCase = true) == true && url.path?.equals("/search", ignoreCase = true) == true) {
+                    lastGoogleSearchUrl = url.toString()
+                }
+
                 // Same-tab OAuth/2FA redirect chains (Google/Apple/Microsoft/etc. sign-in
                 // callbacks) must never be silently killed by the ad-block host list -- only
                 // the popup path (onCreateWindow) used to be exempted via
@@ -525,12 +529,25 @@ open class MainActivity : AppCompatActivity() {
                 return super.shouldInterceptRequest(view, request)
             }
 
-            override fun onReceivedHttpError(view: WebView?, request: WebResourceRequest?, errorResponse: WebResourceResponse?) {
+                        override fun onReceivedHttpError(view: WebView?, request: WebResourceRequest?, errorResponse: WebResourceResponse?) {
                 super.onReceivedHttpError(view, request, errorResponse)
                 val url = request?.url ?: return
+                val status = errorResponse?.statusCode ?: -1
                 NavigationTrace.recordDetails(applicationContext, "HTTP_ERROR", url.toString(),
-                    "status=${errorResponse?.statusCode ?: -1};reason=${errorResponse?.reasonPhrase ?: "unknown"};mainFrame=${request.isForMainFrame};method=${request.method}")
+                    "status=$status;reason=${errorResponse?.reasonPhrase ?: "unknown"};mainFrame=${request.isForMainFrame};method=${request.method}")
+                if (status == 429 && request.isForMainFrame &&
+                    url.host?.equals("www.google.com", ignoreCase = true) == true &&
+                    (url.path?.equals("/sorry/index", ignoreCase = true) == true || url.path?.equals("/search", ignoreCase = true) == true)) {
+                    val now = android.os.SystemClock.elapsedRealtime()
+                    if (now - lastGoogle429FallbackAtMs >= 3000L) {
+                        lastGoogle429FallbackAtMs = now
+                        val searchUrl = lastGoogleSearchUrl
+                        NavigationTrace.recordDetails(applicationContext, "GOOGLE_429_FALLBACK", searchUrl ?: url.toString(), "status=429;destination=external_browser")
+                        if (searchUrl != null) openExternalBrowser(searchUrl)
+                    }
+                }
             }
+
 
             override fun onReceivedError(view: WebView?, request: WebResourceRequest?, error: WebResourceError?) {
                 super.onReceivedError(view, request, error)
@@ -1632,7 +1649,23 @@ open class MainActivity : AppCompatActivity() {
 
     // Any other scheme WebView can't render itself (market:, tel:, mailto:, whatsapp:, geo:,
     // etc.) -- hand it to whichever app on the device claims it instead of failing to load it.
-    private fun handleExternalScheme(url: String): Boolean {
+        private fun openExternalBrowser(url: String) {
+        val chrome = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
+            addCategory(Intent.CATEGORY_BROWSABLE)
+            setPackage("com.android.chrome")
+        }
+        try {
+            startActivity(chrome)
+            return
+        } catch (_: ActivityNotFoundException) { }
+        try {
+            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply { addCategory(Intent.CATEGORY_BROWSABLE) })
+        } catch (_: ActivityNotFoundException) {
+            Toast.makeText(this, "لا يوجد متصفح خارجي متاح", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+private fun handleExternalScheme(url: String): Boolean {
         return try {
             startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
             true
@@ -1751,6 +1784,8 @@ open class MainActivity : AppCompatActivity() {
     // navigation callbacks; this guard only applies to the app's own input handler.
     private var lastInputNavigationUrl: String? = null
     private var lastInputNavigationAtMs: Long = 0L
+    private var lastGoogleSearchUrl: String? = null
+    private var lastGoogle429FallbackAtMs: Long = 0L
 
     private fun loadFromInput() {
         var input = editUrl.text.toString().trim()
