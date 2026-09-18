@@ -251,7 +251,15 @@ class MainActivity : AppCompatActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        intent.dataString?.let { addNewTab(it) }
+        val dataUri = intent.data ?: return
+        // Authentication callbacks belong to the existing navigation/session. Opening
+        // every incoming callback as a new tab can detach the callback from the WebView
+        // that owns its cookies, POST/redirect state, and opener flow.
+        if (isAuthenticationNavigation(dataUri)) {
+            activeWebView.loadUrlHonest(dataUri.toString())
+        } else {
+            addNewTab(dataUri.toString())
+        }
     }
 
     override fun onPause() {
@@ -410,7 +418,9 @@ class MainActivity : AppCompatActivity() {
                 // the site's own fallback (e.g. a sign-in page) instead of landing back in
                 // the app that asked for the sign-in. Real browsers (Chrome included) check
                 // for exactly this before rendering; do the same.
-                if (tryHandOffToAppLink(url)) {
+                // Authentication callbacks must stay inside this WebView session. Handing
+                // them to an installed app can break the OAuth state/cookie flow.
+                if (!isAuthenticationNavigation(url) && tryHandOffToAppLink(url)) {
                     return true
                 }
                 // Link clicks and JS/meta redirects land here (unlike loadUrlHonest's
@@ -432,7 +442,11 @@ class MainActivity : AppCompatActivity() {
                 // and let WebView finish the POST it already has, accepting the smaller
                 // reload-current-document risk described below only for this one case.
                 val isPost = request.method?.equals("POST", ignoreCase = true) == true
-                if (needsFreshLoad && !isPost) {
+                // Never mutate the User-Agent or replay an in-flight POST. WebView owns the
+                // request body, and changing navigation state here can turn an account
+                // selection/CSRF POST into a GET or reload of the previous document.
+                if (isPost) return false
+                if (needsFreshLoad) {
                     // Setting userAgentString here and then returning false (letting WebView
                     // finish the navigation it already decided on) hits a known WebView/Chromium
                     // quirk: changing the UA while a navigation is in flight reloads the CURRENT
@@ -536,8 +550,25 @@ class MainActivity : AppCompatActivity() {
                 val transport = resultMsg.obj as? WebView.WebViewTransport ?: return false
 
                 val popup = WebView(this@MainActivity)
-                popup.settings.javaScriptEnabled = true
-                popup.settings.domStorageEnabled = true
+                // OAuth popups must use the same browser identity/session configuration as
+                // the opener. Cookies are process-wide, but WebSettings and UA overrides are
+                // per-WebView, so a bare popup can otherwise look like a different client.
+                val opener = view ?: activeWebView
+                popup.settings.javaScriptEnabled = opener.settings.javaScriptEnabled
+                popup.settings.domStorageEnabled = opener.settings.domStorageEnabled
+                popup.settings.loadWithOverviewMode = opener.settings.loadWithOverviewMode
+                popup.settings.useWideViewPort = opener.settings.useWideViewPort
+                popup.settings.userAgentString = opener.settings.userAgentString
+                popup.settings.cacheMode = opener.settings.cacheMode
+                popup.settings.mixedContentMode = opener.settings.mixedContentMode
+                popup.settings.setSupportZoom(opener.settings.supportZoom)
+                popup.settings.builtInZoomControls = opener.settings.builtInZoomControls
+                popup.settings.displayZoomControls = opener.settings.displayZoomControls
+                applyUserAgentMetadata(popup)
+                applyUserAgentDataOverride(popup)
+                applyNavigatorUaPatch(popup)
+                CookieManager.getInstance().setAcceptCookie(true)
+                CookieManager.getInstance().setAcceptThirdPartyCookies(popup, true)
                 popup.webViewClient = object : WebViewClient() {
                     override fun shouldOverrideUrlLoading(
                         v: WebView?,
@@ -571,13 +602,20 @@ class MainActivity : AppCompatActivity() {
                         // which is what produced the ServiceLogin <-> www.google.com/?pli=1
                         // bounce seen in blackbrowser_debug.log. Let it keep following its
                         // own chain and only forward once it leaves that host.
-                        if (hostNeedsUaSpoof(destUrl.host)) {
-                            v?.settings?.userAgentString =
-                                computeUserAgent(destUrl.host, forceSpoof = true)
-                            v?.settings?.cacheMode = WebSettings.LOAD_NO_CACHE
+                        if (hostNeedsUaSpoof(destUrl.host) || isAuthenticationNavigation(destUrl)) {
+                            if (hostNeedsUaSpoof(destUrl.host)) {
+                                v?.settings?.userAgentString =
+                                    computeUserAgent(destUrl.host, forceSpoof = true)
+                                applyUserAgentMetadata(v ?: popup)
+                                applyUserAgentDataOverride(v ?: popup)
+                                applyNavigatorUaPatch(v ?: popup)
+                                v?.settings?.cacheMode = WebSettings.LOAD_NO_CACHE
+                            }
                             return false
                         }
 
+                        // Only leave the popup once it has completed the identity-provider
+                        // chain. Preserve the popup's cookies/session while doing so.
                         popup.destroy()
                         activeWebView.loadUrlHonest(destUrl.toString())
                         return true
@@ -1569,6 +1607,27 @@ class MainActivity : AppCompatActivity() {
     // -- which means no single verified/preferred handler exists), that's the OS confirming
     // a real app claims this exact URL, so send it there via startActivity() exactly like
     // handleIntentScheme/handleExternalScheme above do for other schemes.
+    private fun isAuthenticationNavigation(uri: Uri): Boolean {
+        val host = uri.host?.lowercase() ?: return false
+        val identityHost = host == "accounts.google.com" ||
+            host == "oauth2.googleapis.com" ||
+            host == "login.microsoftonline.com" ||
+            host == "appleid.apple.com" ||
+            host == "github.com" ||
+            host.endsWith(".auth0.com") ||
+            host.endsWith(".okta.com")
+
+        val hasOAuthState = uri.getQueryParameter("code") != null ||
+            uri.getQueryParameter("state") != null ||
+            uri.getQueryParameter("error") != null ||
+            uri.getQueryParameter("id_token") != null ||
+            uri.getQueryParameter("access_token") != null ||
+            uri.getQueryParameter("oauth") != null ||
+            uri.getQueryParameter("redirect_uri") != null
+
+        return identityHost || hasOAuthState
+    }
+
     private fun tryHandOffToAppLink(url: Uri): Boolean {
         val intent = Intent(Intent.ACTION_VIEW, url).addCategory(Intent.CATEGORY_BROWSABLE)
         val resolved = try {
