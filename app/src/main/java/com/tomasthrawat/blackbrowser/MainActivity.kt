@@ -391,6 +391,7 @@ open class MainActivity : AppCompatActivity() {
                 request: WebResourceRequest?
             ): Boolean {
                 val url = request?.url ?: return false
+                NavigationTrace.record(applicationContext, "NAV_REQUEST", url.toString())
                 // Same-tab OAuth/2FA redirect chains (Google/Apple/Microsoft/etc. sign-in
                 // callbacks) must never be silently killed by the ad-block host list -- only
                 // the popup path (onCreateWindow) used to be exempted via
@@ -403,6 +404,7 @@ open class MainActivity : AppCompatActivity() {
                     AdBlocker.shouldBlock(url) &&
                     !isTrustedTopLevelNav
                 ) {
+                    NavigationTrace.record(applicationContext, "NAV_BLOCKED", url.toString())
                     return true
                 }
                 // intent:// (Play Store "get the app" / deep-link buttons) and other
@@ -437,8 +439,14 @@ open class MainActivity : AppCompatActivity() {
                 return false
             }
 
+            override fun onPageStarted(view: WebView?, url: String?, favicon: android.graphics.Bitmap?) {
+                super.onPageStarted(view, url, favicon)
+                NavigationTrace.record(applicationContext, "PAGE_STARTED", url ?: "")
+            }
+
             override fun onPageFinished(view: WebView?, url: String?) {
                 super.onPageFinished(view, url)
+                NavigationTrace.record(applicationContext, "PAGE_FINISHED", url ?: "")
                 val tab = tabs.find { it.webView === view } ?: return
                 tab.url = url ?: tab.url
                 tab.title = view?.title?.takeIf { it.isNotBlank() } ?: tab.url
@@ -472,6 +480,7 @@ open class MainActivity : AppCompatActivity() {
                 request: WebResourceRequest?
             ): WebResourceResponse? {
                 val url = request?.url
+                if (url != null) NavigationTrace.record(applicationContext, "RESOURCE", url.toString())
                 // Widened past the original main-frame-only exemption: a same-tab 2FA
                 // "waiting for your confirmation" flow (e.g. Google's own-device approval
                 // step) polls its own host in the background via XHR/fetch -- those are
@@ -487,6 +496,7 @@ open class MainActivity : AppCompatActivity() {
                 val isCloudflareChallenge = url != null && AdBlocker.isCloudflareChallenge(url)
                 val willBlock = url != null && adBlockOn && AdBlocker.shouldBlock(url) && !isTrustedHost && !isCloudflareChallenge
                 if (willBlock) {
+                    NavigationTrace.record(applicationContext, "RESOURCE_BLOCKED", url.toString())
                     return WebResourceResponse("text/plain", "UTF-8", ByteArrayInputStream(ByteArray(0)))
                 }
                 return super.shouldInterceptRequest(view, request)

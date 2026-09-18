@@ -19,9 +19,9 @@ data class HistoryEntry(val title: String, val url: String, val timestamp: Long)
  * Newest entries returned first; capped so it never grows unbounded.
  */
 
-private object NavigationTrace {
+object NavigationTrace {
     private const val TAG = "BlackBrowserTrace"
-    private const val FILE_NAME = "BlackBrowser-WebView-Trace.log"
+    private const val FILE_NAME = "BlackBrowser-WebView-Diagnostics.log"
     private const val MIME = "text/plain"
     private val lock = Any()
     private var sequence = 0L
