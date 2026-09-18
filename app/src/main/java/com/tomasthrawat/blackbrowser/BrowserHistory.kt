@@ -23,7 +23,7 @@ object NavigationTrace {
     private const val TAG = "BlackBrowserTrace"
     private const val FILE_NAME = "BlackBrowser-WebView-Diagnostics.log"
     private const val MIME = "text/plain"
-    private const val RELATIVE_PATH = Environment.DIRECTORY_DOWNLOADS + "/BlackBrowser"
+    private val RELATIVE_PATH = Environment.DIRECTORY_DOWNLOADS + "/BlackBrowser"
     private const val PREFS = "blackbrowser_diagnostics"
     private const val KEY_URI = "diagnostics_uri"
     private val lock = Any()
