@@ -161,7 +161,7 @@ open class MainActivity : AppCompatActivity() {
     }
 
     @SuppressLint("SetJavaScriptEnabled")
-    override fun onCreate(savedInstanceState: Bundle?) {
+    open override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
@@ -300,7 +300,7 @@ open class MainActivity : AppCompatActivity() {
         }
     }
 
-    override fun onDestroy() {
+    open override fun onDestroy() {
         super.onDestroy()
         tabs.forEach { it.webView.destroy() }
     }
