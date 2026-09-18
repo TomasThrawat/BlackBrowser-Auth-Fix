@@ -8819,7 +8819,7 @@ object AdBlocker {
         val host = uri.host?.lowercase() ?: return false
         if (host != "ogads-pa.clients6.google.com") return false
         return uri.path?.equals(
-            "/$rpc/google.internal.onegoogle.asyncdata.v1.AsyncDataService/GetAsyncData",
+            "/\$rpc/google.internal.onegoogle.asyncdata.v1.AsyncDataService/GetAsyncData",
             ignoreCase = true
         ) == true
     }
