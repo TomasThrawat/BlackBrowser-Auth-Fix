@@ -68,7 +68,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-class MainActivity : AppCompatActivity() {
+open class MainActivity : AppCompatActivity() {
 
     private data class Tab(
         val id: Int,
@@ -244,7 +244,10 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        addNewTab(intent?.dataString ?: homeUrl)
+        addNewTab(
+            intent?.dataString ?: homeUrl,
+            isIncognito = intent?.getBooleanExtra(EXTRA_INCOGNITO_MODE, false) == true
+        )
         checkWebViewChannel()
     }
 
@@ -332,9 +335,9 @@ class MainActivity : AppCompatActivity() {
         wv.settings.mixedContentMode = WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
 
         if (isIncognito) {
-            // Private tab: no disk/RAM cache. Note this WebView engine shares one
-            // cookie/session store across the whole app process, so this gives
-            // "no history + no cache" rather than full multi-profile isolation.
+            // Incognito tabs run in the dedicated :incognito process, whose WebView
+            // data directory is isolated from normal tabs. Keep cookies enabled inside
+            // that private profile so Google can maintain challenge/session state.
             wv.settings.cacheMode = WebSettings.LOAD_DEFAULT
         }
         // Needed so onCreateWindow below actually gets called for window.open() (sign-in
@@ -372,8 +375,11 @@ class MainActivity : AppCompatActivity() {
         // reuses whatever session is already stored from a regular tab (stays logged in).
         // switchToTab() re-applies this on every switch too, since the cookie jar itself
         // is one process-wide store shared by all tabs, not a per-tab jar.
-        CookieManager.getInstance().setAcceptCookie(!isIncognito)
-        CookieManager.getInstance().setAcceptThirdPartyCookies(wv, !isIncognito)
+        // Cookie storage is isolated by the process/profile for Incognito. Do not
+        // toggle the process-wide cookie jar, because that makes Google requests
+        // stateless and can trigger repeated unusual-traffic challenges.
+        CookieManager.getInstance().setAcceptCookie(true)
+        CookieManager.getInstance().setAcceptThirdPartyCookies(wv, true)
 
         wv.webViewClient = object : WebViewClient() {
             // Stops a same-tab redirect chain (meta-refresh, JS location change, a clicked
@@ -727,11 +733,9 @@ class MainActivity : AppCompatActivity() {
         val previousTab = tabs.getOrNull(currentTabIndex)
         currentTabIndex = index
         val tab = tabs[index]
-        // Keep the shared cookie jar's accept policy in sync with whichever tab is
-        // actually on screen: incognito must not send/accept cookies (no reused login
-        // session), a regular tab needs cookies back on to stay signed in normally.
-        CookieManager.getInstance().setAcceptCookie(!tab.isIncognito)
-        CookieManager.getInstance().setAcceptThirdPartyCookies(tab.webView, !tab.isIncognito)
+        // Cookie policy is profile-wide. Normal tabs and Incognito tabs use
+        // different Android processes/WebView data directories, so switching tabs
+        // must never toggle the global cookie jar.
         // A tab that isn't the one on screen has no business animating, tracking
         // location, or running plugins in the background. onPause() is per-WebView
         // (unlike pauseTimers(), which is global and would also freeze the tab we're
@@ -766,7 +770,11 @@ class MainActivity : AppCompatActivity() {
         tab.webView.destroy()
 
         if (tabs.isEmpty()) {
-            addNewTab()
+            if (intent?.getBooleanExtra(EXTRA_INCOGNITO_MODE, false) == true) {
+                finishAndRemoveTask()
+            } else {
+                addNewTab()
+            }
             return
         }
 
@@ -825,12 +833,22 @@ class MainActivity : AppCompatActivity() {
         rebuild()
 
         btnNewTab.setOnClickListener {
-            addNewTab()
+            addNewTab(
+                isIncognito = intent?.getBooleanExtra(EXTRA_INCOGNITO_MODE, false) == true
+            )
             dialog.dismiss()
         }
 
         btnNewIncognitoTab.setOnClickListener {
-            addNewTab(isIncognito = true)
+            if (intent?.getBooleanExtra(EXTRA_INCOGNITO_MODE, false) == true) {
+                addNewTab(isIncognito = true)
+            } else {
+                startActivity(
+                    Intent(this, IncognitoActivity::class.java).apply {
+                        putExtra(EXTRA_INCOGNITO_MODE, true)
+                    }
+                )
+            }
             dialog.dismiss()
         }
 
@@ -1613,7 +1631,6 @@ class MainActivity : AppCompatActivity() {
             host == "oauth2.googleapis.com" ||
             host == "login.microsoftonline.com" ||
             host == "appleid.apple.com" ||
-            host == "github.com" ||
             host.endsWith(".auth0.com") ||
             host.endsWith(".okta.com")
 
@@ -1761,6 +1778,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     companion object {
+        private const val EXTRA_INCOGNITO_MODE = "com.tomasthrawat.blackbrowser.EXTRA_INCOGNITO_MODE"
         private const val REQUEST_STORAGE_PERMISSION = 1001
         private const val REQUEST_SET_DEFAULT_BROWSER = 1002
         private const val REQUEST_FILE_CHOOSER = 1003

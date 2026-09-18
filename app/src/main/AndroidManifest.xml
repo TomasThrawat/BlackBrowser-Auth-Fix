@@ -51,6 +51,12 @@
             </intent-filter>
         </activity>
 
+        <activity
+            android:name=".IncognitoActivity"
+            android:exported="false"
+            android:process=":incognito"
+            android:configChanges="orientation|screenSize|keyboardHidden" />
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"
