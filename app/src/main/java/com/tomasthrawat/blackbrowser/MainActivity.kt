@@ -429,49 +429,11 @@ open class MainActivity : AppCompatActivity() {
                 if (!isAuthenticationNavigation(url) && tryHandOffToAppLink(url)) {
                     return true
                 }
-                // Link clicks and JS/meta redirects land here (unlike loadUrlHonest's
-                // app-initiated loads), so the UA has to be corrected for the new
-                // destination here too, before letting the load through. See loadUrlHonest's
-                // comment: identity-provider hosts -- and the hop right after one -- must keep
-                // the disguised UA and never replay a cached redirect-chain response; every
-                // other host keeps the plain UA and LOAD_DEFAULT.
-                val isOrdinaryGoogleHost = url.host?.equals("www.google.com", ignoreCase = true) == true ||
-                    url.host?.equals("google.com", ignoreCase = true) == true
-                val needsFreshLoad = !isOrdinaryGoogleHost &&
-                    (hostNeedsUaSpoof(url.host) || (view?.cameFromIdentityProvider() == true))
-                // A POST navigation -- e.g. the form submit Google's account-chooser step
-                // does the moment an account is tapped -- carries a body that
-                // WebResourceRequest never exposes; there is no way to read it back out to
-                // replay it. loadUrlHonest() below always issues loadUrl(), which is always a
-                // GET, so taking the load over ourselves for a POST silently drops that body
-                // (the selected-account/CSRF data) and the server just re-renders the same
-                // chooser page -- "pick an account -> page reloads -> pick it again", forever.
-                // Only replay through loadUrlHonest for GET/method-less navigations, where no
-                // body exists to lose; for POST, apply the same UA/cache fix in place instead
-                // and let WebView finish the POST it already has, accepting the smaller
-                // reload-current-document risk described below only for this one case.
-                val isPost = request.method?.equals("POST", ignoreCase = true) == true
-                // Never mutate the User-Agent or replay an in-flight POST. WebView owns the
-                // request body, and changing navigation state here can turn an account
-                // selection/CSRF POST into a GET or reload of the previous document.
-                if (isPost) return false
-                if (needsFreshLoad) {
-                    // Setting userAgentString here and then returning false (letting WebView
-                    // finish the navigation it already decided on) hits a known WebView/Chromium
-                    // quirk: changing the UA while a navigation is in flight reloads the CURRENT
-                    // document instead of completing the new one (Chromium's own
-                    // AwSettingsTest#testUpdatingUserAgentWhileLoadingCausesReload is named after
-                    // exactly this). That's what silently turned "open Gmail from search" into
-                    // "stay on the Google search results page" -- mail.google.com was allowed
-                    // through but never actually loaded. Take the load over ourselves the same
-                    // way app-initiated navigations already do, instead of handing WebView an
-                    // in-flight request whose UA just changed under it.
-                    view?.loadUrlHonest(url.toString())
-                    return true
-                }
-                view?.settings?.userAgentString = computeUserAgent(url.host, forceSpoof = needsFreshLoad)
-                view?.settings?.cacheMode =
-                    if (needsFreshLoad) WebSettings.LOAD_NO_CACHE else WebSettings.LOAD_DEFAULT
+                // HTTP(S) navigation is owned by WebView. Do not change User-Agent,
+                // cache mode, or call loadUrl()/reload() while a navigation is in flight.
+                // Android explicitly recommends returning false for URLs WebView handles.
+                // This is especially important for Google Search because its result-page
+                // redirects, POSTs, and client-side navigations must remain one native chain.
                 return false
             }
 
