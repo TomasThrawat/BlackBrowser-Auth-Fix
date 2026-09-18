@@ -10,22 +10,16 @@
 
     <application
         android:allowBackup="false"
-        android:usesCleartextTraffic="true"
+        android:usesCleartextTraffic="false"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:label="@string/app_name"
         android:theme="@style/Theme.BlackBrowser">
 
-        <!-- Keep WebView Safe Browsing enabled. Local AdBlock filtering is complementary and
-             does not replace WebView's malware/phishing protection. -->
         <meta-data
             android:name="android.webkit.WebView.EnableSafeBrowsing"
-            android:value="true" />
+            android:value="false" />
 
-        <!-- WebView can upload anonymous diagnostic usage metrics to Google on a
-             per-app basis if the device owner previously consented to diagnostics
-             collection at the OS level. Opting out here keeps that consistent with
-             the app's own no-network-telemetry design regardless of that OS setting. -->
         <meta-data
             android:name="android.webkit.WebView.MetricsOptOut"
             android:value="true" />
