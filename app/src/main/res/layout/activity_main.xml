@@ -1,0 +1,130 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:background="@color/pure_black">
+
+    <ProgressBar
+        android:id="@+id/progressBar"
+        style="?android:attr/progressBarStyleHorizontal"
+        android:layout_width="match_parent"
+        android:layout_height="3dp"
+        android:max="100"
+        android:progressTint="@color/white"
+        android:visibility="gone" />
+
+    <FrameLayout
+        android:id="@+id/webViewContainer"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:background="@color/pure_black" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:background="@color/pure_black"
+        android:paddingStart="8dp"
+        android:paddingEnd="8dp"
+        android:paddingTop="8dp"
+        android:paddingBottom="8dp">
+
+        <ImageButton
+            android:id="@+id/btnHistory"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:src="@drawable/ic_history"
+            android:background="@android:color/transparent"
+            android:contentDescription="@string/history_desc" />
+
+        <ImageButton
+            android:id="@+id/btnDownloads"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:layout_marginStart="8dp"
+            android:src="@drawable/ic_downloads"
+            android:background="@android:color/transparent"
+            android:contentDescription="@string/downloads_desc" />
+
+        <TextView
+            android:id="@+id/btnTabsBox"
+            android:layout_width="34dp"
+            android:layout_height="34dp"
+            android:layout_marginStart="8dp"
+            android:background="@drawable/bg_tab_box"
+            android:gravity="center"
+            android:text="1"
+            android:textColor="@color/white"
+            android:textSize="13sp"
+            android:textStyle="bold"
+            android:contentDescription="@string/tabs_desc" />
+
+        <EditText
+            android:id="@+id/editUrl"
+            android:layout_width="0dp"
+            android:layout_height="40dp"
+            android:layout_weight="1"
+            android:layout_marginStart="8dp"
+            android:hint="@string/url_hint"
+            android:textColor="@color/white"
+            android:textColorHint="@color/gray_hint"
+            android:background="@color/pure_black"
+            android:singleLine="true"
+            android:inputType="textUri"
+            android:imeOptions="actionGo" />
+
+        <ImageButton
+            android:id="@+id/btnReload"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:layout_marginStart="8dp"
+            android:src="@android:drawable/ic_menu_rotate"
+            android:background="@android:color/transparent"
+            android:contentDescription="Reload" />
+
+        <ImageButton
+            android:id="@+id/btnAdBlock"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:layout_marginStart="8dp"
+            android:src="@drawable/ic_shield"
+            android:background="@android:color/transparent"
+            android:contentDescription="@string/adblock_desc_on" />
+
+        <ImageButton
+            android:id="@+id/btnDesktopSite"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:layout_marginStart="8dp"
+            android:src="@drawable/ic_desktop"
+            android:background="@android:color/transparent"
+            android:contentDescription="@string/desktop_site_desc_off" />
+
+        <ImageButton
+            android:id="@+id/btnSetDefaultBrowser"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:layout_marginStart="8dp"
+            android:src="@drawable/ic_home"
+            android:background="@android:color/transparent"
+            android:contentDescription="@string/set_default_browser_desc" />
+
+    </LinearLayout>
+
+    </LinearLayout>
+
+    <FrameLayout
+        android:id="@+id/fullscreenContainer"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@color/pure_black"
+        android:visibility="gone" />
+
+</FrameLayout>

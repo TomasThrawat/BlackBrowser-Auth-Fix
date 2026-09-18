@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="horizontal"
+    android:gravity="center_vertical"
+    android:background="?android:attr/selectableItemBackground"
+    android:paddingTop="10dp"
+    android:paddingBottom="10dp">
+
+    <ImageView
+        android:id="@+id/rowIncognitoIcon"
+        android:layout_width="16dp"
+        android:layout_height="16dp"
+        android:layout_marginEnd="6dp"
+        android:src="@drawable/ic_incognito"
+        android:tint="@color/incognito_purple"
+        android:contentDescription="@string/incognito_tab_desc"
+        android:visibility="gone" />
+
+    <TextView
+        android:id="@+id/rowText"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:textColor="@color/white"
+        android:textSize="14sp"
+        android:maxLines="1"
+        android:ellipsize="end" />
+
+    <TextView
+        android:id="@+id/rowClose"
+        android:layout_width="32dp"
+        android:layout_height="32dp"
+        android:layout_marginStart="8dp"
+        android:gravity="center"
+        android:text="\u00D7"
+        android:textColor="@color/close_red"
+        android:textSize="20sp"
+        android:textStyle="bold"
+        android:background="?android:attr/selectableItemBackgroundBorderless"
+        android:contentDescription="@string/close_tab_desc" />
+
+</LinearLayout>
