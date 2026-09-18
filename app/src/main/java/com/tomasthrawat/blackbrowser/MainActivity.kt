@@ -1745,6 +1745,13 @@ open class MainActivity : AppCompatActivity() {
         btnSetDefaultBrowser.visibility = if (isDefaultBrowser()) View.GONE else View.VISIBLE
     }
 
+    // Guard app-initiated address-bar submissions against accidental duplicate
+    // dispatches. The diagnostic log showed the exact same Google Search GET being
+    // requested twice within ~500 ms. Do not suppress normal redirects or WebView
+    // navigation callbacks; this guard only applies to the app's own input handler.
+    private var lastInputNavigationUrl: String? = null
+    private var lastInputNavigationAtMs: Long = 0L
+
     private fun loadFromInput() {
         var input = editUrl.text.toString().trim()
         if (input.isEmpty()) return
@@ -1760,6 +1767,18 @@ open class MainActivity : AppCompatActivity() {
             "https://www.google.com/search?q=${Uri.encode(input)}"
         }
 
+        val now = android.os.SystemClock.elapsedRealtime()
+        if (input == lastInputNavigationUrl && now - lastInputNavigationAtMs < 1500L) {
+            NavigationTrace.recordDetails(
+                applicationContext,
+                "NAV_DEDUPED",
+                input,
+                "source=address_bar;deltaMs=" + (now - lastInputNavigationAtMs)
+            )
+            return
+        }
+        lastInputNavigationUrl = input
+        lastInputNavigationAtMs = now
         activeWebView.loadUrlHonest(input)
     }
 
