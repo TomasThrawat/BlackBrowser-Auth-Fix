@@ -382,19 +382,6 @@ open class MainActivity : AppCompatActivity() {
         // stateless and can trigger repeated unusual-traffic challenges.
         CookieManager.getInstance().setAcceptCookie(true)
         CookieManager.getInstance().setAcceptThirdPartyCookies(wv, true)
-        NavigationTrace.recordDetails(
-            applicationContext,
-            "WEBVIEW_CONFIG",
-            "about:blank",
-            "package=${WebView.getCurrentWebViewPackage()?.packageName ?: "unknown"}" +
-                ";version=${WebView.getCurrentWebViewPackage()?.versionName ?: "unknown"}" +
-                ";ua=${wv.settings.userAgentString}" +
-                ";cacheMode=${wv.settings.cacheMode}" +
-                ";js=${wv.settings.javaScriptEnabled}" +
-                ";domStorage=${wv.settings.domStorageEnabled}" +
-                ";thirdPartyCookies=${CookieManager.getInstance().acceptThirdPartyCookies(wv)}" +
-                ";acceptCookies=${CookieManager.getInstance().acceptCookie()}"
-        )
 
         wv.webViewClient = object : WebViewClient() {
             // Stops a same-tab redirect chain (meta-refresh, JS location change, a clicked
@@ -406,10 +393,6 @@ open class MainActivity : AppCompatActivity() {
                 request: WebResourceRequest?
             ): Boolean {
                 val url = request?.url ?: return false
-                NavigationTrace.recordDetails(
-                    applicationContext, "NAV_REQUEST", url.toString(),
-                    "method=${request.method};mainFrame=${request.isForMainFrame};gesture=${request.hasGesture()};redirect=${request.isRedirect};headers=${request.requestHeaders.keys.sorted().joinToString(",")}"
-                )
                 if (request.isForMainFrame && request.method.equals("GET", ignoreCase = true) && url.host?.equals("www.google.com", ignoreCase = true) == true && url.path?.equals("/search", ignoreCase = true) == true) {
                     lastGoogleSearchUrl = url.toString()
                 }
@@ -426,12 +409,6 @@ open class MainActivity : AppCompatActivity() {
                     lastGoogleSearchUrl != null
                 ) {
                     val searchUrl = lastGoogleSearchUrl
-                    NavigationTrace.recordDetails(
-                        applicationContext,
-                        "GOOGLE_429_REDIRECT_INTERCEPTED",
-                        searchUrl ?: url.toString(),
-                        "destination=external_browser;redirect=" + request.isRedirect
-                    )
                     lastGoogleSearchUrl = null
                     if (searchUrl != null) openExternalBrowser(searchUrl)
                     return true
@@ -449,7 +426,6 @@ open class MainActivity : AppCompatActivity() {
                     AdBlocker.shouldBlock(url) &&
                     !isTrustedTopLevelNav
                 ) {
-                    NavigationTrace.record(applicationContext, "NAV_BLOCKED", url.toString())
                     return true
                 }
                 // intent:// (Play Store "get the app" / deep-link buttons) and other
@@ -486,12 +462,10 @@ open class MainActivity : AppCompatActivity() {
 
             override fun onPageStarted(view: WebView?, url: String?, favicon: android.graphics.Bitmap?) {
                 super.onPageStarted(view, url, favicon)
-                NavigationTrace.record(applicationContext, "PAGE_STARTED", url ?: "")
             }
 
             override fun onPageFinished(view: WebView?, url: String?) {
                 super.onPageFinished(view, url)
-                NavigationTrace.record(applicationContext, "PAGE_FINISHED", url ?: "")
                 val tab = tabs.find { it.webView === view } ?: return
                 tab.url = url ?: tab.url
                 tab.title = view?.title?.takeIf { it.isNotBlank() } ?: tab.url
@@ -526,10 +500,6 @@ open class MainActivity : AppCompatActivity() {
             ): WebResourceResponse? {
                 val url = request?.url
                 if (url != null) {
-                    NavigationTrace.recordDetails(
-                        applicationContext, "RESOURCE", url.toString(),
-                        "method=${request.method};mainFrame=${request.isForMainFrame};gesture=${request.hasGesture()};redirect=${request.isRedirect};headers=${request.requestHeaders.keys.sorted().joinToString(",")}"
-                    )
                 }
                 // Widened past the original main-frame-only exemption: a same-tab 2FA
                 // "waiting for your confirmation" flow (e.g. Google's own-device approval
@@ -546,7 +516,6 @@ open class MainActivity : AppCompatActivity() {
                 val isCloudflareChallenge = url != null && AdBlocker.isCloudflareChallenge(url)
                 val willBlock = url != null && adBlockOn && AdBlocker.shouldBlock(url) && !isTrustedHost && !isCloudflareChallenge
                 if (willBlock) {
-                    NavigationTrace.record(applicationContext, "RESOURCE_BLOCKED", url.toString())
                     return WebResourceResponse("text/plain", "UTF-8", ByteArrayInputStream(ByteArray(0)))
                 }
                 return super.shouldInterceptRequest(view, request)
@@ -556,8 +525,6 @@ open class MainActivity : AppCompatActivity() {
                 super.onReceivedHttpError(view, request, errorResponse)
                 val url = request?.url ?: return
                 val status = errorResponse?.statusCode ?: -1
-                NavigationTrace.recordDetails(applicationContext, "HTTP_ERROR", url.toString(),
-                    "status=$status;reason=${errorResponse?.reasonPhrase ?: "unknown"};mainFrame=${request.isForMainFrame};method=${request.method}")
                 if (status == 429 && request.isForMainFrame &&
                     url.host?.equals("www.google.com", ignoreCase = true) == true &&
                     (url.path?.equals("/sorry/index", ignoreCase = true) == true || url.path?.equals("/search", ignoreCase = true) == true)) {
@@ -565,7 +532,6 @@ open class MainActivity : AppCompatActivity() {
                     if (now - lastGoogle429FallbackAtMs >= 3000L) {
                         lastGoogle429FallbackAtMs = now
                         val searchUrl = lastGoogleSearchUrl
-                        NavigationTrace.recordDetails(applicationContext, "GOOGLE_429_FALLBACK", searchUrl ?: url.toString(), "status=429;destination=external_browser")
                         if (searchUrl != null) openExternalBrowser(searchUrl)
                     }
                 }
@@ -575,13 +541,9 @@ open class MainActivity : AppCompatActivity() {
             override fun onReceivedError(view: WebView?, request: WebResourceRequest?, error: WebResourceError?) {
                 super.onReceivedError(view, request, error)
                 val url = request?.url ?: return
-                NavigationTrace.recordDetails(applicationContext, "WEB_ERROR", url.toString(),
-                    "code=${error?.errorCode ?: -1};description=${error?.description ?: "unknown"};mainFrame=${request.isForMainFrame};method=${request.method}")
             }
 
             override fun onReceivedSslError(view: WebView?, handler: SslErrorHandler?, error: android.net.http.SslError?) {
-                NavigationTrace.recordDetails(applicationContext, "SSL_ERROR", error?.url ?: "about:blank",
-                    "primaryError=${error?.primaryError ?: -1}")
                 super.onReceivedSslError(view, handler, error)
             }
         }
@@ -1802,9 +1764,8 @@ private fun handleExternalScheme(url: String): Boolean {
     }
 
     // Guard app-initiated address-bar submissions against accidental duplicate
-    // dispatches. The diagnostic log showed the exact same Google Search GET being
-    // requested twice within ~500 ms. Do not suppress normal redirects or WebView
-    // navigation callbacks; this guard only applies to the app's own input handler.
+    // dispatches. Do not suppress normal redirects or WebView navigation callbacks;
+    // this guard only applies to the app's own input handler.
     private var lastInputNavigationUrl: String? = null
     private var lastInputNavigationAtMs: Long = 0L
     private var lastGoogleSearchUrl: String? = null
@@ -1827,12 +1788,6 @@ private fun handleExternalScheme(url: String): Boolean {
 
         val now = android.os.SystemClock.elapsedRealtime()
         if (input == lastInputNavigationUrl && now - lastInputNavigationAtMs < 1500L) {
-            NavigationTrace.recordDetails(
-                applicationContext,
-                "NAV_DEDUPED",
-                input,
-                "source=address_bar;deltaMs=" + (now - lastInputNavigationAtMs)
-            )
             return
         }
         lastInputNavigationUrl = input
