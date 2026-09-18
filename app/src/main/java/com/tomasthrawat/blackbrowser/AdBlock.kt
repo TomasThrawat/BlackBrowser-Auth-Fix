@@ -8809,7 +8809,24 @@ object AdBlocker {
         return uri.path?.startsWith("/cdn-cgi/", ignoreCase = true) == true
     }
 
+    // Google Search uses these endpoints for reCAPTCHA Enterprise / risk verification.
+    // They are not ad hosts; blocking them can leave the verification page unable to
+    // complete, so Google keeps the session on /sorry/index.
+    fun isGoogleVerificationResource(uri: Uri): Boolean {
+        val host = uri.host?.lowercase() ?: return false
+        if (host == "clientmetrics-pa.googleapis.com") return true
+        if (host == "recaptcha.net" || host.endsWith(".recaptcha.net")) return true
+        if (host == "gstatic.com" || host.endsWith(".gstatic.com")) {
+            return uri.path?.startsWith("/recaptcha/", ignoreCase = true) == true
+        }
+        if (host == "google.com" || host.endsWith(".google.com")) {
+            return uri.path?.startsWith("/recaptcha/", ignoreCase = true) == true
+        }
+        return false
+    }
+
     fun shouldBlock(uri: Uri): Boolean {
+        if (isGoogleVerificationResource(uri)) return false
         val host = uri.host?.lowercase() ?: return false
         if (hostOrParentMatches(host, allBlockedHosts)) return true
         if (blockedHostSubstrings.any { host.contains(it) }) return true
