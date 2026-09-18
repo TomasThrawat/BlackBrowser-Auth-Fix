@@ -561,7 +561,7 @@ class MainActivity : AppCompatActivity() {
                 popup.settings.userAgentString = opener.settings.userAgentString
                 popup.settings.cacheMode = opener.settings.cacheMode
                 popup.settings.mixedContentMode = opener.settings.mixedContentMode
-                popup.settings.setSupportZoom(opener.settings.supportZoom)
+                popup.settings.setSupportZoom(opener.settings.supportZoom())
                 popup.settings.builtInZoomControls = opener.settings.builtInZoomControls
                 popup.settings.displayZoomControls = opener.settings.displayZoomControls
                 applyUserAgentMetadata(popup)
